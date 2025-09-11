@@ -1,33 +1,46 @@
 use axum::{
-    extract::{Query, State, WebSocketUpgrade, Path},
-    http::{StatusCode, HeaderMap},
+    extract::{State, Path, Query, WebSocketUpgrade},
+    http::{HeaderMap, StatusCode},
     response::{Json, IntoResponse},
-    routing::{get, post, put, delete},
+    routing::{get, post},
     Router,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
-use tracing::{info, error};
+use tracing::info;
 use uuid::Uuid;
 
-// Database models
-#[derive(Serialize, Deserialize, Clone)]
-pub struct User {
-    pub id: Uuid,
-    pub email: String,
-    pub name: String,
-    pub kinde_id: String,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-}
+mod db;
+mod ai_service;
+
+use db::{DbPool, User, Workspace};
+use ai_service::{AiService, WorkflowNode};
 
 #[derive(Serialize, Deserialize)]
 pub struct CreateUser {
     pub email: String,
     pub name: String,
     pub kinde_id: String,
+}
+
+
+#[derive(Serialize, Deserialize)]
+pub struct CreateWorkspace {
+    pub name: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct WorkflowRequest {
+    pub message: String,
+    pub workspace_id: Uuid,
+}
+
+
+#[derive(Serialize, Deserialize)]
+pub struct WorkflowResponse {
+    pub nodes: Vec<WorkflowNode>,
+    pub output: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -40,8 +53,10 @@ pub struct ApiResponse<T> {
 // Application state
 #[derive(Clone)]
 pub struct AppState {
-    pub users: Arc<RwLock<HashMap<Uuid, User>>>,
+    pub db_pool: DbPool,
+    pub ai_service: AiService,
     pub kinde_config: KindeConfig,
+    pub gcp_project_id: String,
 }
 
 #[derive(Clone)]
@@ -83,13 +98,11 @@ async fn health_check() -> Json<ApiResponse<String>> {
     })
 }
 
-async fn get_users(State(state): State<AppState>) -> Json<ApiResponse<Vec<User>>> {
-    let users = state.users.read().await;
-    let user_list: Vec<User> = users.values().cloned().collect();
-    
+async fn get_users(State(_state): State<AppState>) -> Json<ApiResponse<Vec<User>>> {
+    // For now, return empty list - users are created dynamically through auth
     Json(ApiResponse {
         success: true,
-        data: Some(user_list),
+        data: Some(vec![]),
         message: "Users retrieved successfully".to_string(),
     })
 }
@@ -98,16 +111,9 @@ async fn create_user(
     State(state): State<AppState>,
     Json(payload): Json<CreateUser>,
 ) -> Result<Json<ApiResponse<User>>, StatusCode> {
-    let user = User {
-        id: Uuid::new_v4(),
-        email: payload.email,
-        name: payload.name,
-        kinde_id: payload.kinde_id,
-        created_at: chrono::Utc::now(),
-    };
-
-    let mut users = state.users.write().await;
-    users.insert(user.id, user.clone());
+    let user = User::create(&state.db_pool, payload.email, payload.name, payload.kinde_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(ApiResponse {
         success: true,
@@ -117,19 +123,11 @@ async fn create_user(
 }
 
 async fn get_user(
-    State(state): State<AppState>,
-    Path(user_id): Path<Uuid>,
-) -> Result<Json<ApiResponse<User>>, StatusCode> {
-    let users = state.users.read().await;
-    
-    match users.get(&user_id) {
-        Some(user) => Ok(Json(ApiResponse {
-            success: true,
-            data: Some(user.clone()),
-            message: "User found".to_string(),
-        })),
-        None => Err(StatusCode::NOT_FOUND),
-    }
+    State(_state): State<AppState>,
+    Path(_user_id): Path<Uuid>,
+) -> impl IntoResponse {
+    // Users are managed through Kinde auth, not stored separately
+    StatusCode::NOT_FOUND
 }
 
 // WebSocket handler for real-time features
@@ -200,25 +198,182 @@ async fn kinde_callback(
     }))
 }
 
+// Workspace handlers
+async fn get_workspaces(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Json<ApiResponse<Vec<Workspace>>>, StatusCode> {
+    let _token = validate_kinde_token(headers).await?;
+    
+    // TODO: Get user_id from JWT token
+    let user_id = Uuid::new_v4(); // Mock for now
+    
+    let workspaces = Workspace::find_by_user_id(&state.db_pool, user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    Ok(Json(ApiResponse {
+        success: true,
+        data: Some(workspaces),
+        message: "Workspaces retrieved successfully".to_string(),
+    }))
+}
+
+async fn create_workspace(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(payload): Json<CreateWorkspace>,
+) -> Result<Json<ApiResponse<Workspace>>, StatusCode> {
+    let _token = validate_kinde_token(headers).await?;
+    
+    // TODO: Get user_id from JWT token
+    let user_id = Uuid::new_v4(); // Mock user for now
+    
+    let workspace = Workspace::create(&state.db_pool, payload.name, user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(ApiResponse {
+        success: true,
+        data: Some(workspace),
+        message: "Workspace created successfully".to_string(),
+    }))
+}
+
+// AI Workflow handlers
+async fn process_workflow(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(payload): Json<WorkflowRequest>,
+) -> Result<Json<ApiResponse<WorkflowResponse>>, StatusCode> {
+    let _token = validate_kinde_token(headers).await?;
+    
+    info!("Processing workflow for message: {}", payload.message);
+    
+    // Use the AI service to process the workflow with OpenRouter and fallbacks
+    match state.ai_service.process_workflow(&payload.message).await {
+        Ok(nodes) => {
+            let output = nodes
+                .iter()
+                .filter(|n| n.status == "completed" && n.output.is_some())
+                .map(|n| format!("{}: {}", n.title, n.output.as_ref().unwrap_or(&"No output".to_string())))
+                .collect::<Vec<_>>()
+                .join("\n\n");
+            
+            Ok(Json(ApiResponse {
+                success: true,
+                data: Some(WorkflowResponse { nodes, output }),
+                message: "Workflow processing completed successfully".to_string(),
+            }))
+        }
+        Err(e) => {
+            info!("Workflow processing failed: {}", e);
+            
+            // Return error nodes for visualization
+            let error_nodes = vec![
+                WorkflowNode {
+                    id: Uuid::new_v4().to_string(),
+                    node_type: "error".to_string(),
+                    status: "error".to_string(),
+                    title: "Processing Error".to_string(),
+                    description: "Failed to process workflow with AI service".to_string(),
+                    output: Some(format!("Error: {}", e)),
+                },
+            ];
+            
+            Ok(Json(ApiResponse {
+                success: false,
+                data: Some(WorkflowResponse { 
+                    nodes: error_nodes, 
+                    output: format!("Failed to process workflow: {}", e) 
+                }),
+                message: "Workflow processing failed".to_string(),
+            }))
+        }
+    }
+}
+
+// OpenRouter models endpoint
+async fn get_openrouter_models(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Json<ApiResponse<Vec<serde_json::Value>>>, StatusCode> {
+    let _token = validate_kinde_token(headers).await?;
+    
+    match state.ai_service.list_available_models().await {
+        Ok(models) => Ok(Json(ApiResponse {
+            success: true,
+            data: Some(models),
+            message: "Available models retrieved from OpenRouter".to_string(),
+        })),
+        Err(e) => {
+            info!("Failed to fetch OpenRouter models: {}", e);
+            
+            // Fallback to hardcoded models matching our AI service fallback strategy
+            let fallback_models = vec![
+                serde_json::json!({
+                    "id": "anthropic/claude-3-5-sonnet-20241022",
+                    "name": "Claude 3.5 Sonnet",
+                    "provider": "Anthropic"
+                }),
+                serde_json::json!({
+                    "id": "openai/gpt-4o-2024-11-20",
+                    "name": "GPT-4o",
+                    "provider": "OpenAI"
+                }),
+                serde_json::json!({
+                    "id": "google/gemini-pro-1.5-latest",
+                    "name": "Gemini Pro 1.5",
+                    "provider": "Google"
+                }),
+                serde_json::json!({
+                    "id": "google/gemini-flash-1.5-8b",
+                    "name": "Gemini Flash 1.5",
+                    "provider": "Google"
+                })
+            ];
+            
+            Ok(Json(ApiResponse {
+                success: true,
+                data: Some(fallback_models),
+                message: "Available models retrieved (fallback)".to_string(),
+            }))
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing
-    tracing_subscriber::init();
+    tracing_subscriber::fmt::init();
 
     // Load environment variables
     dotenvy::dotenv().ok();
 
+    // Initialize database connection
+    let database_url = std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "postgresql://localhost/blabout".to_string());
+    
+    let db_pool = db::create_pool(&database_url).await?;
+    db::init_schema(&db_pool).await?;
+
+    // Initialize AI service
+    let openrouter_key = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
+    let ai_service = AiService::new(openrouter_key);
+
     // Initialize application state
     let kinde_config = KindeConfig {
-        domain: std::env::var("KINDE_DOMAIN").unwrap_or_else(|_| "https://your-domain.kinde.com".to_string()),
+        domain: std::env::var("KINDE_DOMAIN").unwrap_or_else(|_| "https://blabout.kinde.com".to_string()),
         client_id: std::env::var("KINDE_CLIENT_ID").unwrap_or_default(),
         client_secret: std::env::var("KINDE_CLIENT_SECRET").unwrap_or_default(),
-        redirect_uri: std::env::var("KINDE_REDIRECT_URI").unwrap_or_else(|_| "http://localhost:3000/auth/callback".to_string()),
+        redirect_uri: std::env::var("KINDE_REDIRECT_URI").unwrap_or_else(|_| "https://blabout.com/auth/callback".to_string()),
     };
 
     let app_state = AppState {
-        users: Arc::new(RwLock::new(HashMap::new())),
+        db_pool,
+        ai_service,
         kinde_config,
+        gcp_project_id: std::env::var("GOOGLE_CLOUD_PROJECT_ID").unwrap_or_default(),
     };
 
     // Build our application with routes
@@ -226,6 +381,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/health", get(health_check))
         .route("/api/users", get(get_users).post(create_user))
         .route("/api/users/:id", get(get_user))
+        .route("/api/workspaces", get(get_workspaces).post(create_workspace))
+        .route("/api/workflow/process", post(process_workflow))
+        .route("/api/models", get(get_openrouter_models))
         .route("/ws", get(websocket_handler))
         .route("/auth/login", get(kinde_login))
         .route("/auth/callback", get(kinde_callback))

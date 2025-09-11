@@ -63,15 +63,27 @@ monorepo/
 
 ### Frontend (React)
 - **UI Framework**: React 18 + TypeScript
-- **Styling**: TailwindCSS + Emotion CSS + Tamagui (when applicable)
-- **Components**: Shadcn UI + HeadlessUI + Blocksuite
-- **Animation**: Framer Motion + GSAP + React Spring + use-gesture
-- **State**: Redux Toolkit + TanStack Query
-- **Testing**: Vitest + React Testing Library + Playwright (E2E)
-- **Bundling**: Parcel (upgradeable to Webpack)
+- **Component Architecture**: Blocksuite framework + Shadcn UI + HeadlessUI.com
+- **Styling**: TailwindCSS + Tamagui
+- **Animation**: Motion + GSAP + React-Spring + @use-gesture (touch gestures)
+- **State**: React Redux Toolkit + TanStack Query
+- **Rich Text**: TipTap editor
+- **Drag & Drop**: @hello-pangea/dnd
+- **3D Graphics**: react-three-fiber (when needed)
+- **Canvas**: Excalidraw integration
+- **File Handling**: FileReader API + FormData API
+- **Search**: Meilisearch
+- **Localization**: react-i18n-next
+- **Testing**: Testsprite (preferred) OR Vitest + React Testing Library + Snapshot Tests
+- **E2E Testing**: Playwright
+- **Component Development**: React Cosmos for testing components
+- **Code Quality**: ESLint + Prettier
+- **Package Management**: npm
+- **Bundling**: Webpack
+- **Dark/Light Mode**: Always implement both modes
 
 ### Backend (Rust)
-- **Framework**: Axum + Tokio
+- **Framework**: Axum + Tokio + Node.js compatibility
 - **Database**: ParadeDB (PostgreSQL-compatible)
 - **Auth**: Kinde Integration
 - **Deployment**: Cloudflare Workers + Traditional server
@@ -81,6 +93,7 @@ monorepo/
 - **Framework**: Expo + React Native
 - **UI**: Tamagui + Expo Vector Icons
 - **Navigation**: React Navigation
+- **Chat/Voice/Video**: Sendbird API integration
 - **Deployment**: EAS Build → App Store + Play Store
 
 ### Desktop (Electron)
@@ -88,28 +101,53 @@ monorepo/
 - **Packaging**: Electron Builder
 - **Distribution**: Mac App Store + Windows Store + Linux
 
+### Additional Integrations
+- **Video Editing**: Remotion API
+- **Documentation**: Docusaurus
+- **Analytics**: PostHog
+- **Newsletters**: Mautic automation
+- **Design Resources**: Storytale.io (mockups), Blush.design + Storyset.com (illustrations)
+- **Icons**: Heroicons.com
+
 ## 🛠️ Development Workflow
 
 ### Before Starting Any Task
 
-1. **Consult Available Resources**:
+**🚨 CRITICAL: Always consult these resources BEFORE beginning any development work:**
+
+1. **Mandatory Resource Check**:
    ```bash
-   # Check package.json files for available dependencies
+   # Check ALL package.json files for available dependencies
    find . -name "package.json" -exec echo "=== {} ===" \; -exec cat {} \;
    
-   # Review MCP servers
+   # Review MCP servers and their capabilities
    ls -la mcp-servers/
+   cat mcp-servers/*.json
    
-   # Check shared utilities
-   ls -la shared/
+   # Check shared utilities and existing code snippets
+   find shared/ -name "*.js" -o -name "*.ts" -o -name "*.tsx" | head -20
    ```
 
-2. **Review Open Source Libraries**:
-   - Check if functionality already exists in installed packages
+2. **Review Available Open Source Libraries & Tools**:
+   - **Component Libraries**: Shadcn UI, HeadlessUI, Blocksuite
+   - **Animation Libraries**: Motion, GSAP, React-Spring, @use-gesture
+   - **State Management**: React Redux Toolkit, TanStack Query
+   - **Testing Tools**: Testsprite, Vitest, React Testing Library, Playwright
+   - **Design Resources**: Storytale.io, Blush.design, Storyset.com, Heroicons
+   - **Specialized Tools**: TipTap, Excalidraw, Sendbird, Remotion, Meilisearch
    - Use React Cosmos for component development: `npm run cosmos`
    - Leverage existing utilities in `shared/` directory
 
-3. **Environment Setup**:
+3. **MCP Server Consultation**:
+   ```bash
+   # Check what MCP servers are available
+   # These provide pre-built integrations and tools
+   # Always use MCP servers before building custom solutions
+   cat mcp-servers/composio-server.json
+   cat mcp-servers/filesystem-server.json
+   ```
+
+4. **Environment Setup**:
    ```bash
    # Install all dependencies
    npm run install:all
@@ -152,74 +190,128 @@ monorepo/
 
 ### Component Development
 
-1. **Always use React Cosmos** to develop and test components:
+1. **MANDATORY: Always use React Cosmos** to develop and test components:
    ```bash
    cd frontend && npm run cosmos
    ```
 
-2. **Component Structure**:
+2. **Component Structure (Using Specified Libraries)**:
    ```typescript
    // src/components/MyComponent/MyComponent.tsx
-   import { motion } from 'framer-motion';
-   import { Button } from '@/components/ui/button';
+   import { motion } from 'motion'; // Primary animation library
+   import { useSpring, animated } from 'react-spring'; // Secondary animation
+   import { useDrag } from '@use-gesture/react'; // Touch gestures
+   import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+   import { Button } from '@/components/ui/button'; // Shadcn UI
+   import { Disclosure } from '@headlessui/react'; // HeadlessUI
+   import { useEditor } from '@tiptap/react'; // Rich text editing
+   import { Excalidraw } from '@excalidraw/excalidraw'; // Canvas
+   import { useTranslation } from 'react-i18next'; // Localization
    
    interface MyComponentProps {
      // Define props with TypeScript
    }
    
    export const MyComponent: React.FC<MyComponentProps> = ({ ...props }) => {
+     const { t } = useTranslation();
+     const [springs, api] = useSpring(() => ({ opacity: 0 }));
+     
      return (
        <motion.div
          initial={{ opacity: 0 }}
          animate={{ opacity: 1 }}
-         className="dark:bg-gray-900 bg-white"
+         className="dark:bg-gray-900 bg-white text-gray-900 dark:text-white"
        >
-         {/* Always support dark/light mode */}
+         <animated.div style={springs}>
+           {/* Always support dark/light mode */}
+           {t('component.title')}
+         </animated.div>
        </motion.div>
      );
    };
    ```
 
-3. **Create Cosmos fixtures**:
+3. **Create Cosmos Fixtures for Component Testing**:
    ```typescript
    // src/components/MyComponent/MyComponent.fixture.tsx
    import { MyComponent } from './MyComponent';
    
    export default {
-     'Default': <MyComponent />,
+     'Default Light Mode': <MyComponent />,
+     'Default Dark Mode': (
+       <div className="dark">
+         <MyComponent />
+       </div>
+     ),
      'With Props': <MyComponent prop="value" />,
+     'With Animation': <MyComponent animated={true} />,
    };
    ```
 
 ### Testing Strategy
 
-1. **Unit Tests** (Vitest):
+1. **Primary Testing: Testsprite** (Preferred):
+   ```typescript
+   // Use Testsprite for comprehensive testing when available
+   import { testsprite } from 'testsprite';
+   
+   testsprite('MyComponent', {
+     component: MyComponent,
+     props: { variant: 'primary' },
+     scenarios: ['default', 'dark-mode', 'responsive']
+   });
+   ```
+
+2. **Fallback: Unit Tests** (Vitest + React Testing Library):
    ```typescript
    import { render, screen } from '@testing-library/react';
    import { MyComponent } from './MyComponent';
    
-   test('renders correctly', () => {
+   test('renders correctly in light mode', () => {
      render(<MyComponent />);
+     expect(screen.getByText('Expected Text')).toBeInTheDocument();
+   });
+   
+   test('renders correctly in dark mode', () => {
+     render(<div className="dark"><MyComponent /></div>);
      expect(screen.getByText('Expected Text')).toBeInTheDocument();
    });
    ```
 
-2. **E2E Tests** (Playwright):
+3. **E2E Tests** (Playwright):
    ```typescript
    import { test, expect } from '@playwright/test';
    
    test('user flow works correctly', async ({ page }) => {
      await page.goto('/');
      await expect(page.locator('h1')).toContainText('Welcome');
+     
+     // Test dark mode toggle
+     await page.click('[data-testid="theme-toggle"]');
+     await expect(page.locator('html')).toHaveClass(/dark/);
    });
    ```
 
-3. **Devlooper Integration Testing**:
+4. **Snapshot Tests** for visual regression testing:
+   ```typescript
+   import { render } from '@testing-library/react';
+   import { MyComponent } from './MyComponent';
+   
+   test('matches snapshot - light mode', () => {
+     const { container } = render(<MyComponent />);
+     expect(container.firstChild).toMatchSnapshot();
+   });
+   
+   test('matches snapshot - dark mode', () => {
+     const { container } = render(<div className="dark"><MyComponent /></div>);
+     expect(container.firstChild).toMatchSnapshot();
+   });
+   ```
+
+5. **Devlooper Integration Testing**:
    - Run before deployment to catch integration issues
    - Automatically fixes environment setup problems
    - Ensures all dependencies are correctly installed
-
-4. **Snapshot Tests** for visual regression testing
 
 ## 🎨 UI/UX Guidelines
 
@@ -403,26 +495,129 @@ modal run src.main --prompt="create a data processing utility" --template="pytho
 3. **Keyboard navigation**: Ensure all features are keyboard accessible
 4. **Screen reader**: Test with screen readers
 
-## 🗑️ What Can Be Removed
+## 🗑️ What Can Be Removed / Optional Components
 
-### Optional Components (Comment out if not needed):
-- **3D Features**: `react-three-fiber` + `three`
-- **Rich Text**: `@tiptap/react` + `@tiptap/starter-kit`
-- **Canvas Drawing**: `@excalidraw/excalidraw`
-- **Video Editing**: Remotion API integration
-- **Chat Features**: Sendbird integration
-- **Search**: Meilisearch integration
-- **Analytics**: PostHog integration
-- **Newsletter**: Mautic integration
+### Template Customization Guide
 
-### Removing Components
-```bash
-# Remove unused dependencies
-npm uninstall package-name
+**🔧 Comment out or remove these dependencies if your application doesn't need them:**
 
-# Comment out imports in package.json
-# "package-name": "^1.0.0", // OPTIONAL: Remove if not using 3D features
+#### 3D Graphics & Visualization
+```json
+// In package.json - Remove if no 3D features needed
+{
+  "react-three-fiber": "^8.0.0", // OPTIONAL: 3D graphics
+  "three": "^0.150.0", // OPTIONAL: 3D library
+  "@react-three/drei": "^9.0.0" // OPTIONAL: 3D helpers
+}
 ```
+
+#### Rich Text Editing
+```json
+// Remove if no rich text editing needed
+{
+  "@tiptap/react": "^2.0.0", // OPTIONAL: Rich text editor
+  "@tiptap/starter-kit": "^2.0.0", // OPTIONAL: TipTap plugins
+  "@tiptap/extension-*": "^2.0.0" // OPTIONAL: Various TipTap extensions
+}
+```
+
+#### Canvas & Drawing
+```json
+// Remove if no drawing/diagramming needed
+{
+  "@excalidraw/excalidraw": "^0.15.0", // OPTIONAL: Canvas drawing
+  "rough-js": "^4.5.0" // OPTIONAL: Hand-drawn graphics
+}
+```
+
+#### Video & Media
+```json
+// Remove if no video editing needed
+{
+  "@remotion/cli": "^4.0.0", // OPTIONAL: Video editing API
+  "@remotion/renderer": "^4.0.0", // OPTIONAL: Video rendering
+  "ffmpeg": "^4.4.0" // OPTIONAL: Video processing
+}
+```
+
+#### Chat & Communication
+```json
+// Remove if no chat/voice/video needed
+{
+  "sendbird": "^3.1.0", // OPTIONAL: Chat, voice, video APIs
+  "@sendbird/uikit-react": "^3.0.0" // OPTIONAL: Sendbird UI components
+}
+```
+
+#### Search & Analytics
+```json
+// Remove if not using search or analytics
+{
+  "meilisearch": "^0.33.0", // OPTIONAL: Search engine
+  "posthog-js": "^1.80.0", // OPTIONAL: Analytics
+  "posthog-node": "^3.0.0" // OPTIONAL: Server-side analytics
+}
+```
+
+#### Newsletter & Marketing
+```json
+// Remove if no newsletter/marketing automation
+{
+  "mautic": "^1.0.0", // OPTIONAL: Newsletter automation
+  "@mautic/api": "^1.0.0" // OPTIONAL: Mautic API integration
+}
+```
+
+#### Drag & Drop
+```json
+// Remove if no drag and drop needed
+{
+  "@hello-pangea/dnd": "^16.0.0", // OPTIONAL: Drag and drop
+  "react-beautiful-dnd": "^13.0.0" // ALTERNATIVE: Older DnD library
+}
+```
+
+#### Advanced Animations
+```json
+// Keep motion, but remove others if basic animations suffice
+{
+  "gsap": "^3.12.0", // OPTIONAL: Advanced animations
+  "react-spring": "^9.7.0", // OPTIONAL: Physics-based animations
+  "@use-gesture/react": "^10.2.0" // OPTIONAL: Touch/gesture handling
+}
+```
+
+### Removing Unused Components Process
+
+1. **Identify Dependencies**:
+   ```bash
+   # Check what's actually imported in your codebase
+   grep -r "import.*from.*package-name" src/
+   ```
+
+2. **Remove Dependencies**:
+   ```bash
+   # Remove from package.json
+   npm uninstall package-name
+   
+   # Or comment out in package.json
+   // "package-name": "^1.0.0", // OPTIONAL: Description of what this does
+   ```
+
+3. **Remove Related Code**:
+   ```bash
+   # Remove component files that depend on removed libraries
+   rm -rf src/components/ComponentUsingRemovedLibrary/
+   
+   # Remove imports and references in other files
+   ```
+
+4. **Update Documentation**:
+   ```bash
+   # Update README and component stories
+   # Remove related test files
+   # Update deployment scripts if needed
+   ```
 
 ## 📚 Learning Resources
 

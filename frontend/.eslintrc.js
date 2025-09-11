@@ -8,6 +8,8 @@ module.exports = {
     'eslint:recommended',
     'plugin:react/recommended',
     'plugin:react-hooks/recommended',
+    'react-app',
+    'react-app/jest'
   ],
   parserOptions: {
     ecmaFeatures: {
@@ -21,6 +23,8 @@ module.exports = {
     'react-hooks',
   ],
   rules: {
+    'no-undef': 'off',
+    'no-unused-vars': 'warn',
     'react/react-in-jsx-scope': 'off',
     'react/prop-types': 'off',
   },
