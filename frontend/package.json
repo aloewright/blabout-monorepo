@@ -8,7 +8,7 @@
     "npm": ">=8.0.0"
   },
   "scripts": {
-    "start": "node start-server.js",
+    "start": "serve -s build -p $PORT",
     "dev": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
