@@ -1,0 +1,45 @@
+{
+  "name": "composio-server",
+  "description": "Composio MCP Server for agent integrations",
+  "version": "1.0.0",
+  "server": {
+    "command": "npx",
+    "args": ["@composio/mcp-server"],
+    "env": {
+      "COMPOSIO_API_KEY": "${COMPOSIO_API_KEY}"
+    }
+  },
+  "tools": [
+    {
+      "name": "github_integration",
+      "description": "GitHub repository management and code operations"
+    },
+    {
+      "name": "slack_integration", 
+      "description": "Slack messaging and workspace management"
+    },
+    {
+      "name": "linear_integration",
+      "description": "Linear issue tracking and project management"
+    },
+    {
+      "name": "notion_integration",
+      "description": "Notion workspace and database operations"
+    },
+    {
+      "name": "gmail_integration",
+      "description": "Gmail email management and automation"
+    },
+    {
+      "name": "calendar_integration",
+      "description": "Google Calendar scheduling and event management"
+    }
+  ],
+  "resources": [
+    {
+      "uri": "composio://tools",
+      "name": "Available Composio Tools",
+      "description": "List of all available Composio integrations and tools"
+    }
+  ]
+}

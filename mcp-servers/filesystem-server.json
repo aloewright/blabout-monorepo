@@ -1,0 +1,42 @@
+{
+  "name": "filesystem-server",
+  "description": "Filesystem operations MCP server",
+  "version": "1.0.0",
+  "server": {
+    "command": "node",
+    "args": ["./mcp-servers/filesystem-server.js"]
+  },
+  "tools": [
+    {
+      "name": "read_file",
+      "description": "Read contents of a file"
+    },
+    {
+      "name": "write_file",
+      "description": "Write content to a file"
+    },
+    {
+      "name": "list_directory",
+      "description": "List contents of a directory"
+    },
+    {
+      "name": "create_directory",
+      "description": "Create a new directory"
+    },
+    {
+      "name": "delete_file",
+      "description": "Delete a file or directory"
+    },
+    {
+      "name": "search_files",
+      "description": "Search for files matching a pattern"
+    }
+  ],
+  "resources": [
+    {
+      "uri": "file://",
+      "name": "File System",
+      "description": "Local filesystem access"
+    }
+  ]
+}

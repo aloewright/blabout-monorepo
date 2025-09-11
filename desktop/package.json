@@ -1,0 +1,27 @@
+{
+  "name": "@monorepo/desktop",
+  "version": "0.1.0",
+  "description": "Desktop app for the monorepo",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "pack": "electron-builder --dir"
+  },
+  "devDependencies": {
+    "electron": "^25.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "build": {
+    "appId": "com.monorepo.desktop",
+    "productName": "Monorepo Desktop",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "public/**/*"
+    ]
+  }
+}

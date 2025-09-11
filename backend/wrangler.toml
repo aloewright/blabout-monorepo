@@ -1,0 +1,30 @@
+name = "monorepo-backend"
+main = "src/worker.rs"
+compatibility_date = "2023-10-30"
+
+[env.production]
+name = "monorepo-backend-prod"
+
+[env.staging]
+name = "monorepo-backend-staging"
+
+[[kv_namespaces]]
+binding = "USERS"
+id = "your-kv-namespace-id"
+preview_id = "your-preview-kv-namespace-id"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "monorepo-db"
+database_id = "your-d1-database-id"
+
+[vars]
+ENVIRONMENT = "production"
+
+# Environment variables (set via wrangler secret put)
+# KINDE_DOMAIN
+# KINDE_CLIENT_ID
+# KINDE_CLIENT_SECRET
+# KINDE_REDIRECT_URI
+# OPENROUTER_API_KEY
+# PARADE_DB_URL

@@ -1,0 +1,8 @@
+import { SvgProps } from 'react-native-svg';
+export declare const SatisfiedEmoji: (props: SvgProps) => JSX.Element;
+export declare const NeutralEmoji: (props: SvgProps) => JSX.Element;
+export declare const DissatisfiedEmoji: (props: SvgProps) => JSX.Element;
+export declare const VeryDissatisfiedEmoji: (props: SvgProps) => JSX.Element;
+export declare const VerySatisfiedEmoji: (props: SvgProps) => JSX.Element;
+export declare const CheckSVG: (props: SvgProps) => JSX.Element;
+export declare const CancelSVG: (props: SvgProps) => JSX.Element;

@@ -1,0 +1,266 @@
+name: Monorepo CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  NODE_VERSION: '18'
+  RUST_VERSION: 'stable'
+
+jobs:
+  # Frontend React App with Cloudflare Pages
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      
+      - name: Install Frontend Dependencies
+        run: npm ci
+        working-directory: ./frontend
+      
+      - name: Run ESLint
+        run: npm run lint
+        working-directory: ./frontend
+      
+      - name: Run Vitest Tests
+        run: npm run test
+        working-directory: ./frontend
+      
+      - name: Run Playwright E2E Tests
+        run: |
+          npx playwright install --with-deps
+          npm run test:e2e
+        working-directory: ./frontend
+      
+      - name: Build Frontend
+        run: npm run build
+        working-directory: ./frontend
+        env:
+          REACT_APP_KINDE_DOMAIN: ${{ secrets.KINDE_DOMAIN }}
+          REACT_APP_KINDE_CLIENT_ID: ${{ secrets.KINDE_CLIENT_ID }}
+          REACT_APP_API_URL: ${{ secrets.API_URL }}
+      
+      - name: Deploy to Cloudflare Pages
+        if: github.ref == 'refs/heads/main'
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: monorepo-frontend
+          directory: frontend/build
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
+  # Backend Rust + Cloudflare Workers
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: rustfmt, clippy
+      
+      - name: Cache Rust Dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            backend/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('backend/Cargo.lock') }}
+      
+      - name: Check Rust Format
+        run: cargo fmt -- --check
+        working-directory: ./backend
+      
+      - name: Run Clippy
+        run: cargo clippy -- -D warnings
+        working-directory: ./backend
+      
+      - name: Run Backend Tests
+        run: cargo test
+        working-directory: ./backend
+      
+      - name: Build Traditional Server
+        run: cargo build --release --bin server
+        working-directory: ./backend
+      
+      - name: Setup Wrangler
+        if: github.ref == 'refs/heads/main'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: ./backend
+      
+      - name: Deploy Cloudflare Worker
+        if: github.ref == 'refs/heads/main'
+        run: wrangler deploy --env production
+        working-directory: ./backend
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+  # Desktop Electron App
+  desktop:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: desktop/package-lock.json
+      
+      - name: Install Desktop Dependencies
+        run: npm ci
+        working-directory: ./desktop
+      
+      - name: Build Desktop App
+        run: npm run build
+        working-directory: ./desktop
+        env:
+          ELECTRON_BUILDER_CACHE: .cache/electron-builder
+      
+      - name: Upload Desktop Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: desktop-${{ matrix.os }}
+          path: desktop/dist/
+          retention-days: 30
+
+  # Mobile Expo App
+  mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+      
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      
+      - name: Install Mobile Dependencies
+        run: npm ci
+        working-directory: ./mobile
+      
+      - name: Run TypeScript Check
+        run: npx tsc --noEmit
+        working-directory: ./mobile
+      
+      - name: Run Mobile Tests
+        run: npm test
+        working-directory: ./mobile
+      
+      - name: EAS Build (Preview)
+        if: github.event_name == 'pull_request'
+        run: |
+          eas build --platform all --non-interactive --no-wait
+        working-directory: ./mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      
+      - name: EAS Build & Submit (Production)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          eas build --platform all --non-interactive
+          eas submit --platform all --non-interactive
+        working-directory: ./mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+  # Shared Package
+  shared:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: shared/package-lock.json
+      
+      - name: Install Shared Dependencies
+        run: npm ci
+        working-directory: ./shared
+      
+      - name: Run Shared Tests
+        run: npm test
+        working-directory: ./shared
+      
+      - name: Build Shared Package
+        run: npm run build
+        working-directory: ./shared
+
+  # Security & Quality Checks
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Security Audit
+        run: |
+          npm audit --audit-level high
+          cd frontend && npm audit --audit-level high
+          cd ../desktop && npm audit --audit-level high
+          cd ../mobile && npm audit --audit-level high
+          cd ../shared && npm audit --audit-level high
+      
+      - name: Check for Secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+
+  # Documentation
+  docs:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Build Documentation
+        run: |
+          cd docs
+          npm install docusaurus
+          npm run build
+      
+      - name: Deploy Documentation
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs/build
