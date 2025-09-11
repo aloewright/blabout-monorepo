@@ -1,36 +1,20 @@
 steps:
-  # Build the frontend
-  - name: 'gcr.io/cloud-builders/docker'
-    args: [
-      'build', 
-      '-t', 'gcr.io/$PROJECT_ID/blabout-frontend:$COMMIT_SHA',
-      '-f', 'frontend/Dockerfile',
-      './frontend'
-    ]
-
-  # Push the image to Container Registry
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/blabout-frontend:$COMMIT_SHA']
-
-  # Deploy to Cloud Run
+  # Deploy directly from source using Cloud Run buildpacks
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args: [
       'run', 'deploy', 'blabout-frontend',
-      '--image', 'gcr.io/$PROJECT_ID/blabout-frontend:$COMMIT_SHA',
+      '--source', './frontend',
       '--region', 'us-central1',
       '--platform', 'managed',
       '--allow-unauthenticated',
       '--port', '8080',
-      '--set-env-vars', 'NODE_ENV=production',
+      '--set-env-vars', 'NODE_ENV=production,REACT_APP_KINDE_DOMAIN=https://aftuh.kinde.com,REACT_APP_KINDE_CLIENT_ID=86cc8835a73840638345742c900e3265,REACT_APP_KINDE_REDIRECT_URI=https://blabout.com/auth/callback,REACT_APP_KINDE_POST_LOGOUT_REDIRECT_URL=https://blabout.com,REACT_APP_KINDE_POST_LOGIN_REDIRECT_URL=https://blabout.com',
+      '--set-build-env-vars', 'NODE_ENV=production,GOOGLE_NODE_RUN_SCRIPTS=build',
       '--memory', '512Mi',
       '--cpu', '1',
       '--max-instances', '10'
     ]
-
-# Store images in Container Registry
-images:
-  - 'gcr.io/$PROJECT_ID/blabout-frontend:$COMMIT_SHA'
 
 # Build options
 options:
