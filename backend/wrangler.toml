@@ -1,25 +1,28 @@
-name = "monorepo-backend"
-main = "src/worker.rs"
-compatibility_date = "2023-10-30"
+# CLOUDFLARE WORKERS CONFIGURATION - COMMENTED OUT
+# Using Google Cloud deployment only for now
 
-[env.production]
-name = "monorepo-backend-prod"
+# name = "monorepo-backend"
+# main = "src/worker.rs"
+# compatibility_date = "2023-10-30"
 
-[env.staging]
-name = "monorepo-backend-staging"
+# [env.production]
+# name = "monorepo-backend-prod"
 
-[[kv_namespaces]]
-binding = "USERS"
-id = "your-kv-namespace-id"
-preview_id = "your-preview-kv-namespace-id"
+# [env.staging]
+# name = "monorepo-backend-staging"
 
-[[d1_databases]]
-binding = "DB"
-database_name = "monorepo-db"
-database_id = "your-d1-database-id"
+# [[kv_namespaces]]
+# binding = "USERS"
+# id = "your-kv-namespace-id"
+# preview_id = "your-preview-kv-namespace-id"
 
-[vars]
-ENVIRONMENT = "production"
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "monorepo-db"
+# database_id = "your-d1-database-id"
+
+# [vars]
+# ENVIRONMENT = "production"
 
 # Environment variables (set via wrangler secret put)
 # KINDE_DOMAIN

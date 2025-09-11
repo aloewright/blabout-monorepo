@@ -14,14 +14,16 @@ anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Database
-sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "chrono", "uuid"] }
-sea-orm = { version = "0.12", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros"] }
+# Database - ParadeDB
+tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-chrono-0_4", "with-uuid-1"] }
+postgres-types = { version = "0.2", features = ["derive"] }
+bb8 = "0.8"
+bb8-postgres = "0.8"
 
 # Authentication & Security
 jsonwebtoken = "9.0"
 bcrypt = "0.15"
-uuid = { version = "1.0", features = ["v4"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
 
 # WebSocket support
 tokio-tungstenite = "0.20"
@@ -31,24 +33,31 @@ dotenvy = "0.15"
 config = "0.14"
 
 # HTTP Client for external APIs
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", features = ["json", "stream"] }
 
-# Cloudflare Workers compatibility
-worker = { version = "0.0.21", optional = true }
-wasm-bindgen = { version = "0.2", optional = true }
+# AI & ML - OpenRouter with fallbacks
+openai-api-rs = "5.0"
+async-openai = "0.17"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# Cloudflare Workers compatibility - COMMENTED OUT (Using Google Cloud only)
+# worker = { version = "0.0.21", optional = true }
+# wasm-bindgen = { version = "0.2", optional = true }
 
 # Real-time features
 redis = { version = "0.24", features = ["tokio-comp"] }
 
 [features]
 default = []
-cloudflare = ["worker", "wasm-bindgen"]
+# cloudflare = ["worker", "wasm-bindgen"]  # COMMENTED OUT - Using Google Cloud only
 
 [[bin]]
 name = "server"
 path = "src/main.rs"
 
-[[bin]]
-name = "worker"
-path = "src/worker.rs"
-required-features = ["cloudflare"]
+# [[bin]]
+# name = "worker"
+# path = "src/worker.rs"
+# required-features = ["cloudflare"]  # COMMENTED OUT - Using Google Cloud only

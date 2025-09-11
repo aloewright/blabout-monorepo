@@ -1,7 +1,14 @@
 runtime: nodejs18
 
+service: frontend
+
 env_variables:
   NODE_ENV: production
+  REACT_APP_KINDE_CLIENT_ID: 86cc8835a73840638345742c900e3265
+  REACT_APP_KINDE_DOMAIN: https://aftuh.kinde.com
+  REACT_APP_API_BASE_URL: https://api.blabout.com
+  REACT_APP_OPENROUTER_API_KEY: your_openrouter_api_key
+  REACT_APP_GCP_PROJECT_ID: your_gcp_project_id
 
 automatic_scaling:
   min_instances: 0
