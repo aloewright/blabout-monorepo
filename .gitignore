@@ -176,7 +176,7 @@ dist_electron/
 .gcloud/
 
 # Docker
-*.dockerignore
-
+# Docker
+# Keep .dockerignore tracked for reproducible builds
 # MCP Server logs
 *.mcp.log
