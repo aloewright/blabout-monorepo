@@ -1,10 +1,9 @@
 import React from 'react';
-import { useKindeAuth } from '@kinde-oss/kinde-auth-react';
 import { motion } from 'framer-motion';
 import { Layout } from './Layout';
+import GoogleAuth from './GoogleAuth';
 
 export const LoginPage: React.FC = () => {
-  const { login, register } = useKindeAuth();
 
   return (
     <Layout>
@@ -34,31 +33,17 @@ export const LoginPage: React.FC = () => {
             </motion.p>
           </div>
 
-          <div className="space-y-4">
-            <motion.button
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => login()}
-              className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 px-6 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-shadow"
-            >
-              Sign In
-            </motion.button>
-            
-            <motion.button
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => register()}
-              className="w-full bg-white/20 text-white py-4 px-6 rounded-xl font-semibold text-lg border border-white/30 hover:bg-white/30 transition-colors"
-            >
-              Sign Up
-            </motion.button>
-          </div>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="flex justify-center"
+          >
+            <GoogleAuth 
+              onSuccess={(user) => console.log('Login successful:', user)}
+              onError={(error) => console.error('Login failed:', error)}
+            />
+          </motion.div>
 
           <motion.div
             initial={{ opacity: 0 }}
@@ -67,7 +52,7 @@ export const LoginPage: React.FC = () => {
             className="mt-6 text-center"
           >
             <p className="text-white/60 text-sm">
-              Secure authentication powered by Kinde
+              Secure authentication powered by Google
             </p>
           </motion.div>
         </motion.div>
