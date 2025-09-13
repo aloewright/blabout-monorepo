@@ -53,17 +53,22 @@ impl PasetoKeys {
 
         let signing_key = if let Some(sk_b64) = secret_b64 {
             let sk_bytes = b64url_decode_nopad(sk_b64)?;
-            let sk = SigningKey::from_bytes(
-                sk_bytes
+            let seed32: [u8; 32] = match sk_bytes.len() {
+                32 => sk_bytes
                     .as_slice()
                     .try_into()
                     .map_err(|_| "secret key must be 32 bytes".to_string())?,
-            );
-            Some(sk)
+                64 => sk_bytes[0..32]
+                    .try_into()
+                    .map_err(|_| "secret key (64 bytes) must contain 32-byte seed at start".to_string())?,
+                _ => return Err("secret key must be 32 or 64 bytes".to_string()),
+            };
+            Some(SigningKey::from_bytes(&seed32))
         } else { None };
 
         Ok(Self { verifying_key, signing_key })
     }
+}
 }
 
 pub fn issue_v4_public(keys: &PasetoKeys, claims: &PasetoClaims) -> Result<String, String> {
