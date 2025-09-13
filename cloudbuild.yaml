@@ -1,27 +1,16 @@
 steps:
-  # Deploy directly from source using Cloud Run buildpacks
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args: [
-      'run', 'deploy', 'blabout-frontend',
+      'run', 'deploy', '${_SERVICE_NAME}',
       '--source', './frontend',
-      '--region', 'us-central1',
+      '--region', '${_REGION}',
       '--platform', 'managed',
       '--allow-unauthenticated',
       '--port', '8080',
-      '--set-env-vars', 'NODE_ENV=production',
-      '--set-env-vars', 'REACT_APP_KINDE_DOMAIN=https://aftuh.kinde.com',
-      '--set-env-vars', 'REACT_APP_KINDE_CLIENT_ID=86cc8835a73840638345742c900e3265',
-      '--set-env-vars', 'REACT_APP_KINDE_REDIRECT_URI=https://blabout.com/auth/callback',
-      '--set-env-vars', 'REACT_APP_KINDE_POST_LOGOUT_REDIRECT_URL=https://blabout.com',
-      '--set-env-vars', 'REACT_APP_KINDE_POST_LOGIN_REDIRECT_URL=https://blabout.com',
-      '--set-build-env-vars', 'NODE_ENV=production,GOOGLE_NODE_RUN_SCRIPTS=build',
-      '--memory', '512Mi',
-      '--cpu', '1',
-      '--max-instances', '10'
+      '--set-env-vars', 'REACT_APP_GOOGLE_CLIENT_ID=${_REACT_APP_GOOGLE_CLIENT_ID}',
+      '--set-build-env-vars', 'GOOGLE_NODE_RUN_SCRIPTS=build'
     ]
 
-# Build options
 options:
   machineType: 'E2_HIGHCPU_8'
-  substitutionOption: 'ALLOW_LOOSE'

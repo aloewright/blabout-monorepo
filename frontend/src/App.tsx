@@ -7,7 +7,7 @@ import { store } from './store/store';
 import { RootState } from './store/store';
 import { AuthWrapper } from './components/AuthWrapper';
 import { LoginPage } from './components/LoginPage';
-import { Dashboard } from './components/Dashboard';
+import { WorkspaceDashboard } from './components/WorkspaceDashboard';
 import './App.css';
 
 function AppContent() {
@@ -15,7 +15,7 @@ function AppContent() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-600 to-pink-500 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -26,7 +26,7 @@ function AppContent() {
       <Routes>
         <Route 
           path="/*" 
-          element={isAuthenticated ? <Dashboard /> : <LoginPage />} 
+          element={isAuthenticated ? <WorkspaceDashboard /> : <LoginPage />} 
         />
       </Routes>
       <Toaster 
@@ -47,9 +47,11 @@ function AppContent() {
 function App() {
   return (
     <Provider store={store}>
-      <AuthWrapper>
-        <AppContent />
-      </AuthWrapper>
+      <div className="main-bg">
+        <AuthWrapper>
+          <AppContent />
+        </AuthWrapper>
+      </div>
     </Provider>
   );
 }
