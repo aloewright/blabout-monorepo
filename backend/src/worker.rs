@@ -1,8 +1,3 @@
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-
-#[derive(Serialize, Deserialize)]
-pub struct ApiResponse<T> {
     pub success: bool,
     pub data: Option<T>,
     pub message: String,
@@ -17,7 +12,8 @@ pub struct User {
 }
 
 // Cloudflare Worker support removed. This file is deprecated.
-pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Response> {
+//#[cfg(feature = "cloudflare")] // legacy worker support (disabled)
+//pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Response> {
     let router = Router::new();
 
     router

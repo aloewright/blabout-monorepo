@@ -59,29 +59,21 @@ pub struct AppState {
     pub db_pool: DbPool,
     pub ai_service: AiService,
     pub gcp_project_id: String,
-    pub paseto_keys: PasetoKeys,
+    pub paseto_keys: auth_paseto::PasetoKeys,
+}
 }
 
-// Minimal bearer token presence check (frontend can verify via /auth/google/verify)
-async fn validate_bearer_token(headers: HeaderMap) -> Result<String, StatusCode> {
+// Validate PASETO v4.public token and return claims
+async fn validate_paseto(headers: HeaderMap, keys: &auth_paseto::PasetoKeys) -> Result<auth_paseto::PasetoClaims, StatusCode> {
     let auth_header = headers
         .get("authorization")
         .ok_or(StatusCode::UNAUTHORIZED)?
         .to_str()
         .map_err(|_| StatusCode::UNAUTHORIZED)?;
 
-    if !auth_header.starts_with("Bearer ") {
-        return Err(StatusCode::UNAUTHORIZED);
-    }
-
+    if !auth_header.starts_with("Bearer ") { return Err(StatusCode::UNAUTHORIZED); }
     let token = &auth_header[7..];
-    // TODO: Optionally validate token server-side (e.g., call Google userinfo with this token)
-    // For now, just check if token exists
-    if token.is_empty() {
-        return Err(StatusCode::UNAUTHORIZED);
-    }
-
-    Ok(token.to_string())
+    auth_paseto::verify_v4_public(keys, token).map_err(|_| StatusCode::UNAUTHORIZED)
 }
 
 // Handlers
@@ -172,38 +164,26 @@ pub struct GoogleUserInfo {
     pub family_name: Option<String>,
 }
 
-async fn google_verify(headers: HeaderMap) -> Result<Json<ApiResponse<GoogleUserInfo>>, StatusCode> {
-    let auth_header = headers
-        .get("authorization")
-        .ok_or(StatusCode::UNAUTHORIZED)?
-        .to_str()
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
-
-    if !auth_header.starts_with("Bearer ") {
-        return Err(StatusCode::UNAUTHORIZED);
-    }
-
+// Reusable helper: read bearer token from headers, call Google userinfo, parse JSON
+async fn require_google_user(headers: &HeaderMap, client: &reqwest::Client) -> Result<GoogleUserInfo, StatusCode> {
+    let auth_header = headers.get("authorization").ok_or(StatusCode::UNAUTHORIZED)?
+        .to_str().map_err(|_| StatusCode::UNAUTHORIZED)?;
+    if !auth_header.starts_with("Bearer ") { return Err(StatusCode::UNAUTHORIZED); }
     let token = &auth_header[7..];
-
-    let client = reqwest::Client::new();
     let resp = client
         .get("https://www.googleapis.com/oauth2/v3/userinfo")
         .header("Authorization", format!("Bearer {}", token))
         .send()
         .await
         .map_err(|_| StatusCode::BAD_GATEWAY)?;
+    if !resp.status().is_success() { return Err(StatusCode::UNAUTHORIZED); }
+    resp.json::<GoogleUserInfo>().await.map_err(|_| StatusCode::BAD_GATEWAY)
+}
 
-    if !resp.status().is_success() {
-        return Err(StatusCode::UNAUTHORIZED);
-    }
-
-    let info: GoogleUserInfo = resp.json().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
-
-    Ok(Json(ApiResponse {
-        success: true,
-        data: Some(info),
-        message: "Google token verified".to_string(),
-    }))
+async fn google_verify(headers: HeaderMap) -> Result<Json<ApiResponse<GoogleUserInfo>>, StatusCode> {
+    let client = reqwest::Client::new();
+    let info = require_google_user(&headers, &client).await?;
+    Ok(Json(ApiResponse { success: true, data: Some(info), message: "Google token verified".to_string() }))
 }
 
 async fn kinde_callback(
@@ -234,15 +214,11 @@ async fn paseto_login(
     Json(payload): Json<PasetoLoginRequest>,
 ) -> Result<Json<ApiResponse<PasetoLoginResponse>>, StatusCode> {
     if payload.access_token.is_empty() { return Err(StatusCode::BAD_REQUEST); }
-    // Verify Google token
     let client = reqwest::Client::new();
-    let resp = client
-        .get("https://www.googleapis.com/oauth2/v3/userinfo")
-        .header("Authorization", format!("Bearer {}", payload.access_token))
-        .send().await
-        .map_err(|_| StatusCode::BAD_GATEWAY)?;
-    if !resp.status().is_success() { return Err(StatusCode::UNAUTHORIZED); }
-    let info: GoogleUserInfo = resp.json().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+    // Emulate Authorization header for reuse
+    let mut hdrs = HeaderMap::new();
+    hdrs.insert("authorization", format!("Bearer {}", payload.access_token).parse().map_err(|_| StatusCode::BAD_REQUEST)?);
+    let info = require_google_user(&hdrs, &client).await?;
 
     let claims = build_default_claims(info.sub.clone(), info.email.clone(), info.name.clone());
     let token = issue_v4_public(&state.paseto_keys, &claims).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -259,10 +235,9 @@ async fn get_workspaces(
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<Vec<Workspace>>>, StatusCode> {
-    let _token = validate_bearer_token(headers).await?;
-    
-    // TODO: Get user_id from JWT token
-    let user_id = Uuid::new_v4(); // Mock for now
+    let claims = validate_paseto(headers, &state.paseto_keys).await?;
+    // TODO: map claims.sub (auth_provider_id) -> internal user_id via DB
+    let user_id = Uuid::new_v4(); // placeholder: replace with lookup
     
     let workspaces = Workspace::find_by_user_id(&state.db_pool, user_id)
         .await
@@ -280,10 +255,9 @@ async fn create_workspace(
     State(state): State<AppState>,
     Json(payload): Json<CreateWorkspace>,
 ) -> Result<Json<ApiResponse<Workspace>>, StatusCode> {
-    let _token = validate_bearer_token(headers).await?;
-    
-    // TODO: Get user_id from JWT token
-    let user_id = Uuid::new_v4(); // Mock user for now
+    let claims = validate_paseto(headers, &state.paseto_keys).await?;
+    // TODO: map claims.sub (auth_provider_id) -> internal user_id via DB
+    let user_id = Uuid::new_v4(); // placeholder: replace with lookup
     
     let workspace = Workspace::create(&state.db_pool, payload.name, user_id)
         .await
@@ -302,7 +276,7 @@ async fn process_workflow(
     State(state): State<AppState>,
     Json(payload): Json<WorkflowRequest>,
 ) -> Result<Json<ApiResponse<WorkflowResponse>>, StatusCode> {
-    let _token = validate_bearer_token(headers).await?;
+    let _claims = validate_paseto(headers, &state.paseto_keys).await?;
     
     info!("Processing workflow for message: {}", payload.message);
     
@@ -354,7 +328,7 @@ async fn get_openrouter_models(
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<Vec<serde_json::Value>>>, StatusCode> {
-    let _token = validate_bearer_token(headers).await?;
+    let _claims = validate_paseto(headers, &state.paseto_keys).await?;
     
     match state.ai_service.list_available_models().await {
         Ok(models) => Ok(Json(ApiResponse {
@@ -433,7 +407,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build our application with routes
     let app = Router::new()
-        .route("/health", get(health_check))
+.route("/health", get(health_check))
+        .route("/_health", get(health_check))
         .route("/api/users", get(get_users).post(create_user))
         .route("/api/users/:id", get(get_user))
         .route("/api/workspaces", get(get_workspaces).post(create_workspace))
@@ -454,7 +429,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     info!("🚀 Backend server running on http://localhost:{}", port);
     info!("📊 WebSocket endpoint: ws://localhost:{}/ws", port);
-    info!("🔐 Auth endpoint: GET /auth/google/verify");
+info!("🔐 Auth endpoint: GET /auth/google/verify");
+    info!("🔐 Auth endpoint: POST /auth/paseto/login");
 
     axum::serve(listener, app).await?;
 
