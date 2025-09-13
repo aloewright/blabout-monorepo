@@ -1,0 +1,32 @@
+{
+  "name": "blabout-monorepo",
+  "version": "1.0.0",
+  "description": "blabout monorepo",
+  "scripts": {
+    "install:all": "npm install --workspaces --if-present",
+    "dev:full": "npm run --workspaces dev",
+    "start:frontend": "npm run --workspace=frontend start",
+    "start:backend": "npm run --workspace=backend start",
+    "start:mobile": "npm run --workspace=mobile start",
+    "start:desktop": "npm run --workspace=desktop start",
+    "start:worker": "npm run --workspace=worker start",
+    "cosmos": "npm run --workspace=frontend cosmos",
+    "test:all": "npm test --workspaces --if-present",
+    "lint:all": "npm run lint --workspaces --if-present",
+    "format:all": "npm run format --workspaces --if-present",
+    "deploy:frontend": "npm run --workspace=frontend deploy",
+    "deploy:backend": "npm run --workspace=backend deploy",
+    "deploy:mobile": "npm run --workspace=mobile deploy",
+    "deploy:desktop": "npm run --workspace=desktop deploy"
+  },
+  "workspaces": [
+    "frontend",
+    "backend",
+    "mobile",
+    "desktop",
+    "shared",
+    "agents",
+    "mcp-servers",
+    "testsprite_tests"
+  ]
+}

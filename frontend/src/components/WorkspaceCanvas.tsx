@@ -94,11 +94,12 @@ export const WorkspaceCanvas: React.FC<WorkspaceCanvasProps> = ({ workspaceId })
     try {
       // TODO: Implement AI agent workflow orchestration
       // This will call the backend API to process the message
-      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL || 'http://localhost:3001'}/api/workflow/process`, {
+      const base = (process.env.REACT_APP_API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : ''));
+      const response = await fetch(`${base}/api/workflow/process`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('kinde_token') || ''}`
+          'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`
         },
         body: JSON.stringify({ message, workspace_id: workspaceId })
       });

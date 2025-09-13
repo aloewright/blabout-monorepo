@@ -13,15 +13,18 @@ use uuid::Uuid;
 
 mod db;
 mod ai_service;
+mod auth_paseto;
 
 use db::{DbPool, User, Workspace};
+use auth_paseto::{PasetoKeys, verify_v4_public, issue_v4_public, build_default_claims, PasetoClaims};
+use reqwest;
 use ai_service::{AiService, WorkflowNode};
 
 #[derive(Serialize, Deserialize)]
 pub struct CreateUser {
     pub email: String,
     pub name: String,
-    pub kinde_id: String,
+    pub auth_provider_id: String,
 }
 
 
@@ -55,20 +58,12 @@ pub struct ApiResponse<T> {
 pub struct AppState {
     pub db_pool: DbPool,
     pub ai_service: AiService,
-    pub kinde_config: KindeConfig,
     pub gcp_project_id: String,
+    pub paseto_keys: PasetoKeys,
 }
 
-#[derive(Clone)]
-pub struct KindeConfig {
-    pub domain: String,
-    pub client_id: String,
-    pub client_secret: String,
-    pub redirect_uri: String,
-}
-
-// Auth middleware
-async fn validate_kinde_token(headers: HeaderMap) -> Result<String, StatusCode> {
+// Minimal bearer token presence check (frontend can verify via /auth/google/verify)
+async fn validate_bearer_token(headers: HeaderMap) -> Result<String, StatusCode> {
     let auth_header = headers
         .get("authorization")
         .ok_or(StatusCode::UNAUTHORIZED)?
@@ -80,7 +75,7 @@ async fn validate_kinde_token(headers: HeaderMap) -> Result<String, StatusCode> 
     }
 
     let token = &auth_header[7..];
-    // TODO: Implement actual Kinde JWT validation
+    // TODO: Optionally validate token server-side (e.g., call Google userinfo with this token)
     // For now, just check if token exists
     if token.is_empty() {
         return Err(StatusCode::UNAUTHORIZED);
@@ -111,7 +106,7 @@ async fn create_user(
     State(state): State<AppState>,
     Json(payload): Json<CreateUser>,
 ) -> Result<Json<ApiResponse<User>>, StatusCode> {
-    let user = User::create(&state.db_pool, payload.email, payload.name, payload.kinde_id)
+    let user = User::create(&state.db_pool, payload.email, payload.name, payload.auth_provider_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -166,20 +161,49 @@ async fn handle_socket(mut socket: axum::extract::ws::WebSocket) {
     }
 }
 
-// Kinde OAuth handlers
-async fn kinde_login(State(state): State<AppState>) -> impl IntoResponse {
-    let auth_url = format!(
-        "{}/oauth2/auth?client_id={}&redirect_uri={}&response_type=code&scope=openid profile email",
-        state.kinde_config.domain,
-        state.kinde_config.client_id,
-        state.kinde_config.redirect_uri
-    );
-    
-    Json(ApiResponse {
+// Google OAuth verification (minimal): reads Authorization: Bearer <access_token> and returns Google userinfo
+#[derive(Serialize, Deserialize)]
+pub struct GoogleUserInfo {
+    pub sub: String,
+    pub email: Option<String>,
+    pub name: Option<String>,
+    pub picture: Option<String>,
+    pub given_name: Option<String>,
+    pub family_name: Option<String>,
+}
+
+async fn google_verify(headers: HeaderMap) -> Result<Json<ApiResponse<GoogleUserInfo>>, StatusCode> {
+    let auth_header = headers
+        .get("authorization")
+        .ok_or(StatusCode::UNAUTHORIZED)?
+        .to_str()
+        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+    if !auth_header.starts_with("Bearer ") {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    let token = &auth_header[7..];
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .get("https://www.googleapis.com/oauth2/v3/userinfo")
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+
+    if !resp.status().is_success() {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    let info: GoogleUserInfo = resp.json().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+
+    Ok(Json(ApiResponse {
         success: true,
-        data: Some(auth_url),
-        message: "Kinde login URL generated".to_string(),
-    })
+        data: Some(info),
+        message: "Google token verified".to_string(),
+    }))
 }
 
 async fn kinde_callback(
@@ -198,12 +222,44 @@ async fn kinde_callback(
     }))
 }
 
+// PASETO login: exchange Google access token for a PASETO v4.public
+#[derive(Serialize, Deserialize)]
+pub struct PasetoLoginRequest { pub access_token: String }
+
+#[derive(Serialize, Deserialize)]
+pub struct PasetoLoginResponse { pub token: String, pub claims: PasetoClaims }
+
+async fn paseto_login(
+    State(state): State<AppState>,
+    Json(payload): Json<PasetoLoginRequest>,
+) -> Result<Json<ApiResponse<PasetoLoginResponse>>, StatusCode> {
+    if payload.access_token.is_empty() { return Err(StatusCode::BAD_REQUEST); }
+    // Verify Google token
+    let client = reqwest::Client::new();
+    let resp = client
+        .get("https://www.googleapis.com/oauth2/v3/userinfo")
+        .header("Authorization", format!("Bearer {}", payload.access_token))
+        .send().await
+        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+    if !resp.status().is_success() { return Err(StatusCode::UNAUTHORIZED); }
+    let info: GoogleUserInfo = resp.json().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+
+    let claims = build_default_claims(info.sub.clone(), info.email.clone(), info.name.clone());
+    let token = issue_v4_public(&state.paseto_keys, &claims).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(ApiResponse {
+        success: true,
+        data: Some(PasetoLoginResponse { token, claims }),
+        message: "PASETO issued".to_string(),
+    }))
+}
+
 // Workspace handlers
 async fn get_workspaces(
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<Vec<Workspace>>>, StatusCode> {
-    let _token = validate_kinde_token(headers).await?;
+    let _token = validate_bearer_token(headers).await?;
     
     // TODO: Get user_id from JWT token
     let user_id = Uuid::new_v4(); // Mock for now
@@ -224,7 +280,7 @@ async fn create_workspace(
     State(state): State<AppState>,
     Json(payload): Json<CreateWorkspace>,
 ) -> Result<Json<ApiResponse<Workspace>>, StatusCode> {
-    let _token = validate_kinde_token(headers).await?;
+    let _token = validate_bearer_token(headers).await?;
     
     // TODO: Get user_id from JWT token
     let user_id = Uuid::new_v4(); // Mock user for now
@@ -246,7 +302,7 @@ async fn process_workflow(
     State(state): State<AppState>,
     Json(payload): Json<WorkflowRequest>,
 ) -> Result<Json<ApiResponse<WorkflowResponse>>, StatusCode> {
-    let _token = validate_kinde_token(headers).await?;
+    let _token = validate_bearer_token(headers).await?;
     
     info!("Processing workflow for message: {}", payload.message);
     
@@ -298,7 +354,7 @@ async fn get_openrouter_models(
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<Vec<serde_json::Value>>>, StatusCode> {
-    let _token = validate_kinde_token(headers).await?;
+    let _token = validate_bearer_token(headers).await?;
     
     match state.ai_service.list_available_models().await {
         Ok(models) => Ok(Json(ApiResponse {
@@ -362,18 +418,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ai_service = AiService::new(openrouter_key);
 
     // Initialize application state
-    let kinde_config = KindeConfig {
-        domain: std::env::var("KINDE_DOMAIN").unwrap_or_else(|_| "https://blabout.kinde.com".to_string()),
-        client_id: std::env::var("KINDE_CLIENT_ID").unwrap_or_default(),
-        client_secret: std::env::var("KINDE_CLIENT_SECRET").unwrap_or_default(),
-        redirect_uri: std::env::var("KINDE_REDIRECT_URI").unwrap_or_else(|_| "https://blabout.com/auth/callback".to_string()),
-    };
-
+    // Load PASETO keys from env (base64url, no padding) – store via Secret Manager
+    let pk_b64 = std::env::var("PASETO_V4_PUBLIC_KEY_B64").unwrap_or_default();
+    let sk_b64 = std::env::var("PASETO_V4_SECRET_KEY_B64")
+        .map_err(|_| "PASETO_V4_SECRET_KEY_B64 required for issuing tokens")?;
+    let paseto_keys = auth_paseto::PasetoKeys::from_base64(&pk_b64, Some(&sk_b64))
+        .map_err(|e| format!("PASETO key load error: {}", e))?;
     let app_state = AppState {
         db_pool,
         ai_service,
-        kinde_config,
         gcp_project_id: std::env::var("GOOGLE_CLOUD_PROJECT_ID").unwrap_or_default(),
+        paseto_keys,
     };
 
     // Build our application with routes
@@ -385,9 +440,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/workflow/process", post(process_workflow))
         .route("/api/models", get(get_openrouter_models))
         .route("/ws", get(websocket_handler))
-        .route("/auth/login", get(kinde_login))
-        .route("/auth/callback", get(kinde_callback))
-        .layer(CorsLayer::permissive())
+        .route("/auth/paseto/login", post(paseto_login))
+        .route("/auth/google/verify", get(google_verify))
+        .layer(
+            CorsLayer::very_permissive()
+                .allow_origin("https://blabout.com".parse().unwrap())
+        )
         .with_state(app_state);
 
     let port = std::env::var("PORT")
@@ -399,7 +457,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     info!("🚀 Backend server running on http://localhost:{}", port);
     info!("📊 WebSocket endpoint: ws://localhost:{}/ws", port);
-    info!("🔐 Auth endpoints: /auth/login, /auth/callback");
+    info!("🔐 Auth endpoint: GET /auth/google/verify");
 
     axum::serve(listener, app).await?;
 

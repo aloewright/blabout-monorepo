@@ -21,7 +21,9 @@ bb8 = "0.8"
 bb8-postgres = "0.8"
 
 # Authentication & Security
-jsonwebtoken = "9.0"
+# jsonwebtoken removed; switching to PASETO v4.public implemented with Ed25519
+ed25519-dalek = { version = "2", features = ["std"] }
+base64 = "0.21"
 bcrypt = "0.15"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 

@@ -22,22 +22,40 @@ const initialState: WorkspaceState = {
   error: null,
 };
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://backend-dot-your-gcp-project-id.uc.r.appspot.com';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
 // Async thunks
 export const fetchWorkspaces = createAsyncThunk(
   'workspace/fetchWorkspaces',
   async (_, { rejectWithValue }) => {
     try {
-      const token = localStorage.getItem('kinde_token');
-      const response = await axios.get(`${API_BASE_URL}/api/workspaces`, {
+      const apiBase = API_BASE_URL;
+      const googleToken = localStorage.getItem('auth_token') || '';
+
+      if (!apiBase) {
+        // Fallback to mock data if API base is not configured
+        console.warn('REACT_APP_API_BASE_URL not set; returning mock workspace list');
+        return [] as Workspace[];
+      }
+
+      const resp = await axios.get(`${apiBase}/api/workspaces`, {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${googleToken}`,
         },
       });
-      return response.data.data;
+
+      const items = (resp.data?.data || []) as any[];
+      const mapped: Workspace[] = items.map((w) => ({
+        id: w.id,
+        name: w.name,
+        createdAt: w.created_at ? new Date(w.created_at) : new Date(),
+        updatedAt: w.updated_at ? new Date(w.updated_at) : new Date(),
+      }));
+
+      return mapped;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch workspaces');
+      console.error('Failed to fetch workspaces', error);
+      return rejectWithValue('Failed to fetch workspaces');
     }
   }
 );
@@ -46,19 +64,42 @@ export const createWorkspace = createAsyncThunk(
   'workspace/createWorkspace',
   async (name: string, { rejectWithValue }) => {
     try {
-      const token = localStorage.getItem('kinde_token');
-      const response = await axios.post(
-        `${API_BASE_URL}/api/workspaces`,
+      const apiBase = API_BASE_URL;
+      const googleToken = localStorage.getItem('auth_token') || '';
+
+      if (!apiBase) {
+        console.warn('REACT_APP_API_BASE_URL not set; creating mock workspace');
+        return {
+          id: `workspace-${Date.now()}`,
+          name,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        } as Workspace;
+      }
+
+      const resp = await axios.post(
+        `${apiBase}/api/workspaces`,
         { name },
         {
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${googleToken}`,
+            'Content-Type': 'application/json',
           },
         }
       );
-      return response.data.data;
+
+      const w = resp.data?.data;
+      const mapped: Workspace = {
+        id: w.id,
+        name: w.name,
+        createdAt: w.created_at ? new Date(w.created_at) : new Date(),
+        updatedAt: w.updated_at ? new Date(w.updated_at) : new Date(),
+      };
+
+      return mapped;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to create workspace');
+      console.error('Failed to create workspace', error);
+      return rejectWithValue('Failed to create workspace');
     }
   }
 );

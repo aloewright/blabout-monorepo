@@ -1,4 +1,3 @@
-use worker::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -17,7 +16,7 @@ pub struct User {
     pub kinde_id: String,
 }
 
-#[event(fetch)]
+// Cloudflare Worker support removed. This file is deprecated.
 pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Response> {
     let router = Router::new();
 

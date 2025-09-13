@@ -15,7 +15,7 @@ pub struct User {
     pub id: Uuid,
     pub email: String,
     pub name: String,
-    pub kinde_id: String,
+    pub auth_provider_id: String,
     pub created_at: DateTime<Utc>,
 }
 
@@ -98,11 +98,11 @@ pub async fn init_schema(pool: &DbPool) -> Result<()> {
 }
 
 impl User {
-    pub async fn find_by_kinde_id(pool: &DbPool, kinde_id: &str) -> Result<Option<User>> {
+    pub async fn find_by_provider_id(pool: &DbPool, provider_id: &str) -> Result<Option<User>> {
         let conn = pool.get().await?;
         let row = conn.query_opt(
-            "SELECT id, email, name, kinde_id, created_at FROM users WHERE kinde_id = $1",
-            &[&kinde_id],
+            "SELECT id, email, name, kinde_id as auth_provider_id, created_at FROM users WHERE kinde_id = $1",
+            &[&provider_id],
         ).await?;
         
         match row {
@@ -111,12 +111,12 @@ impl User {
         }
     }
 
-    pub async fn create(pool: &DbPool, email: String, name: String, kinde_id: String) -> Result<User> {
+    pub async fn create(pool: &DbPool, email: String, name: String, auth_provider_id: String) -> Result<User> {
         let conn = pool.get().await?;
         let row = conn.query_one(
             "INSERT INTO users (email, name, kinde_id) VALUES ($1, $2, $3) 
-             RETURNING id, email, name, kinde_id, created_at",
-            &[&email, &name, &kinde_id],
+             RETURNING id, email, name, kinde_id as auth_provider_id, created_at",
+            &[&email, &name, &auth_provider_id],
         ).await?;
         
         Ok(User::from_row(row))
@@ -127,7 +127,7 @@ impl User {
             id: row.get("id"),
             email: row.get("email"),
             name: row.get("name"),
-            kinde_id: row.get("kinde_id"),
+            auth_provider_id: row.get("auth_provider_id"),
             created_at: row.get("created_at"),
         }
     }
