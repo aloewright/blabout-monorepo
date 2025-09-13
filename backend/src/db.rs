@@ -1,14 +1,12 @@
 use anyhow::Result;
-use bb8::{Pool, PooledConnection};
+use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use tokio_postgres::{NoTls, Row};
 use uuid::Uuid;
 
 pub type DbPool = Pool<PostgresConnectionManager<NoTls>>;
-pub type DbConnection = PooledConnection<'static, PostgresConnectionManager<NoTls>>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
@@ -97,6 +95,7 @@ pub async fn init_schema(pool: &DbPool) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 impl User {
     pub async fn find_by_provider_id(pool: &DbPool, provider_id: &str) -> Result<Option<User>> {
         let conn = pool.get().await?;

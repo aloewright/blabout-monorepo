@@ -1,7 +1,7 @@
 use chrono::{DateTime, Duration, Utc};
 use ed25519_dalek::{Signature, SigningKey, VerifyingKey, Signer, Verifier};
 use serde::{Deserialize, Serialize};
-use serde_json::Value as JsonValue;
+use base64::Engine;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PasetoClaims {

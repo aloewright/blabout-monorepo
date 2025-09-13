@@ -1,12 +1,11 @@
 use axum::{
-    extract::{State, Path, Query, WebSocketUpgrade},
+    extract::{State, Path, WebSocketUpgrade},
     http::{HeaderMap, StatusCode},
     response::{Json, IntoResponse},
     routing::{get, post},
     Router,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use tower_http::cors::CorsLayer;
 use tracing::info;
 use uuid::Uuid;
@@ -16,8 +15,7 @@ mod ai_service;
 mod auth_paseto;
 
 use db::{DbPool, User, Workspace};
-use auth_paseto::{PasetoKeys, verify_v4_public, issue_v4_public, build_default_claims, PasetoClaims};
-use reqwest;
+use auth_paseto::{issue_v4_public, build_default_claims, PasetoClaims};
 use ai_service::{AiService, WorkflowNode};
 
 #[derive(Serialize, Deserialize)]
@@ -60,7 +58,6 @@ pub struct AppState {
     pub ai_service: AiService,
     pub gcp_project_id: String,
     pub paseto_keys: auth_paseto::PasetoKeys,
-}
 }
 
 // Validate PASETO v4.public token and return claims
@@ -186,21 +183,6 @@ async fn google_verify(headers: HeaderMap) -> Result<Json<ApiResponse<GoogleUser
     Ok(Json(ApiResponse { success: true, data: Some(info), message: "Google token verified".to_string() }))
 }
 
-async fn kinde_callback(
-    State(_state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
-) -> Result<Json<ApiResponse<String>>, StatusCode> {
-    let code = params.get("code").ok_or(StatusCode::BAD_REQUEST)?;
-    
-    // TODO: Exchange code for token with Kinde
-    info!("Received auth code: {}", code);
-    
-    Ok(Json(ApiResponse {
-        success: true,
-        data: Some("Authentication successful".to_string()),
-        message: "User authenticated with Kinde".to_string(),
-    }))
-}
 
 // PASETO login: exchange Google access token for a PASETO v4.public
 #[derive(Serialize, Deserialize)]
@@ -235,7 +217,7 @@ async fn get_workspaces(
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<Vec<Workspace>>>, StatusCode> {
-    let claims = validate_paseto(headers, &state.paseto_keys).await?;
+let _claims = validate_paseto(headers, &state.paseto_keys).await?;
     // TODO: map claims.sub (auth_provider_id) -> internal user_id via DB
     let user_id = Uuid::new_v4(); // placeholder: replace with lookup
     
@@ -255,7 +237,7 @@ async fn create_workspace(
     State(state): State<AppState>,
     Json(payload): Json<CreateWorkspace>,
 ) -> Result<Json<ApiResponse<Workspace>>, StatusCode> {
-    let claims = validate_paseto(headers, &state.paseto_keys).await?;
+let _claims = validate_paseto(headers, &state.paseto_keys).await?;
     // TODO: map claims.sub (auth_provider_id) -> internal user_id via DB
     let user_id = Uuid::new_v4(); // placeholder: replace with lookup
     
