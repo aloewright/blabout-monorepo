@@ -99,7 +99,7 @@ export const WorkspaceCanvas: React.FC<WorkspaceCanvasProps> = ({ workspaceId })
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('google_token') || ''}`
+          'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`
         },
         body: JSON.stringify({ message, workspace_id: workspaceId })
       });

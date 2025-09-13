@@ -13,8 +13,10 @@ use uuid::Uuid;
 
 mod db;
 mod ai_service;
+mod auth_paseto;
 
 use db::{DbPool, User, Workspace};
+use auth_paseto::{PasetoKeys, verify_v4_public, issue_v4_public, build_default_claims, PasetoClaims};
 use reqwest;
 use ai_service::{AiService, WorkflowNode};
 
@@ -57,6 +59,7 @@ pub struct AppState {
     pub db_pool: DbPool,
     pub ai_service: AiService,
     pub gcp_project_id: String,
+    pub paseto_keys: PasetoKeys,
 }
 
 // Minimal bearer token presence check (frontend can verify via /auth/google/verify)
@@ -216,6 +219,38 @@ async fn kinde_callback(
         success: true,
         data: Some("Authentication successful".to_string()),
         message: "User authenticated with Kinde".to_string(),
+    }))
+}
+
+// PASETO login: exchange Google access token for a PASETO v4.public
+#[derive(Serialize, Deserialize)]
+pub struct PasetoLoginRequest { pub access_token: String }
+
+#[derive(Serialize, Deserialize)]
+pub struct PasetoLoginResponse { pub token: String, pub claims: PasetoClaims }
+
+async fn paseto_login(
+    State(state): State<AppState>,
+    Json(payload): Json<PasetoLoginRequest>,
+) -> Result<Json<ApiResponse<PasetoLoginResponse>>, StatusCode> {
+    if payload.access_token.is_empty() { return Err(StatusCode::BAD_REQUEST); }
+    // Verify Google token
+    let client = reqwest::Client::new();
+    let resp = client
+        .get("https://www.googleapis.com/oauth2/v3/userinfo")
+        .header("Authorization", format!("Bearer {}", payload.access_token))
+        .send().await
+        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+    if !resp.status().is_success() { return Err(StatusCode::UNAUTHORIZED); }
+    let info: GoogleUserInfo = resp.json().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+
+    let claims = build_default_claims(info.sub.clone(), info.email.clone(), info.name.clone());
+    let token = issue_v4_public(&state.paseto_keys, &claims).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(ApiResponse {
+        success: true,
+        data: Some(PasetoLoginResponse { token, claims }),
+        message: "PASETO issued".to_string(),
     }))
 }
 
@@ -383,10 +418,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ai_service = AiService::new(openrouter_key);
 
     // Initialize application state
+    // Load PASETO keys from env (base64url, no padding) – store via Secret Manager
+    let pk_b64 = std::env::var("PASETO_V4_PUBLIC_KEY_B64").unwrap_or_default();
+    let sk_b64_opt = std::env::var("PASETO_V4_SECRET_KEY_B64").ok();
+    let paseto_keys = auth_paseto::PasetoKeys::from_base64(&pk_b64, sk_b64_opt.as_deref())
+        .map_err(|e| format!("PASETO key load error: {}", e))?;
+
     let app_state = AppState {
         db_pool,
         ai_service,
         gcp_project_id: std::env::var("GOOGLE_CLOUD_PROJECT_ID").unwrap_or_default(),
+        paseto_keys,
     };
 
     // Build our application with routes
@@ -398,6 +440,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/workflow/process", post(process_workflow))
         .route("/api/models", get(get_openrouter_models))
         .route("/ws", get(websocket_handler))
+        .route("/auth/paseto/login", post(paseto_login))
         .route("/auth/google/verify", get(google_verify))
         .layer(CorsLayer::permissive())
         .with_state(app_state);

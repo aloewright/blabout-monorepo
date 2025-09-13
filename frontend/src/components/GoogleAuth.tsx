@@ -35,18 +35,26 @@ const GoogleAuth: React.FC<GoogleAuthProps> = ({ onSuccess, onError }) => {
 
   const handleLoginSuccess = async (tokenResponse: Omit<TokenResponse, 'error' | 'error_description' | 'error_uri'>) => {
     try {
-      localStorage.setItem('google_token', tokenResponse.access_token);
-      const response = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+      // Exchange Google access token for a server-signed PASETO
+      const apiBase = process.env.REACT_APP_API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+      const loginResp = await axios.post(`${apiBase}/auth/paseto/login`, {
+        access_token: tokenResponse.access_token,
       });
-      
+
+      const pasetoToken = loginResp.data?.data?.token;
+      const claims = loginResp.data?.data?.claims;
+      if (!pasetoToken) throw new Error('No PASETO token returned');
+
+      // Store PASETO token
+      localStorage.setItem('auth_token', pasetoToken);
+
       const userData = {
-        id: response.data.sub,
-        email: response.data.email,
-        name: response.data.name,
-        picture: response.data.picture,
-        given_name: response.data.given_name,
-        family_name: response.data.family_name,
+        id: claims?.sub,
+        email: claims?.email,
+        name: claims?.name,
+        picture: '',
+        given_name: '',
+        family_name: '',
       };
 
       dispatch(setUser(userData));

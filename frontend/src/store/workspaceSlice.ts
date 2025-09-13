@@ -30,7 +30,7 @@ export const fetchWorkspaces = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const apiBase = API_BASE_URL;
-      const googleToken = localStorage.getItem('google_token') || '';
+      const googleToken = localStorage.getItem('auth_token') || '';
 
       if (!apiBase) {
         // Fallback to mock data if API base is not configured
@@ -65,7 +65,7 @@ export const createWorkspace = createAsyncThunk(
   async (name: string, { rejectWithValue }) => {
     try {
       const apiBase = API_BASE_URL;
-      const googleToken = localStorage.getItem('google_token') || '';
+      const googleToken = localStorage.getItem('auth_token') || '';
 
       if (!apiBase) {
         console.warn('REACT_APP_API_BASE_URL not set; creating mock workspace');
