@@ -1,0 +1,14 @@
+[
+  {
+    "id": "github",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-github"],
+    "env": {
+      "GITHUB_TOKEN": "",
+      "GITHUB_API_URL": "https://api.github.com",
+      "GITHUB_GRAPHQL_URL": "https://api.github.com/graphql",
+      "GITHUB_REPO": "aloewright/team-one"
+    }
+  }
+]
+

@@ -91,8 +91,7 @@ pub fn issue_v4_public(keys: &PasetoKeys, claims: &PasetoClaims) -> Result<Strin
     let sig: Signature = signing_key.sign(&pae_bytes);
 
     let token = format!(
-        "{}{}.{}",
-        std::str::from_utf8(header).unwrap_or("v4.public."),
+        "v4.public.{}.{}",
         b64url_nopad(&payload),
         b64url_nopad(&sig.to_bytes())
     );
