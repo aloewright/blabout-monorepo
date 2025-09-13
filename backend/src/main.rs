@@ -237,10 +237,20 @@ async fn create_workspace(
     State(state): State<AppState>,
     Json(payload): Json<CreateWorkspace>,
 ) -> Result<Json<ApiResponse<Workspace>>, StatusCode> {
-let _claims = validate_paseto(headers, &state.paseto_keys).await?;
-    // TODO: map claims.sub (auth_provider_id) -> internal user_id via DB
-    let user_id = Uuid::new_v4(); // placeholder: replace with lookup
-    
+let claims = validate_paseto(headers, &state.paseto_keys).await?;
+// TODO: map claims.sub (auth_provider_id) -> internal user_id via DB
+let user = match User::find_by_provider_id(&state.db_pool, &claims.sub).await {
+    Ok(Some(u)) => u,
+    Ok(None) => {
+        let email = claims.email.clone().unwrap_or_else(|| format!("user+{}@blabout.com", claims.sub));
+        let name = claims.name.clone().unwrap_or_else(|| "Unknown".to_string());
+        User::create(&state.db_pool, email, name, claims.sub.clone())
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    }
+    Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+};
+let user_id = user.id;
     let workspace = Workspace::create(&state.db_pool, payload.name, user_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
