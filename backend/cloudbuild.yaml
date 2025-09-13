@@ -1,40 +1,52 @@
 steps:
-  # Build the Rust backend
-  - name: 'gcr.io/cloud-builders/docker'
-    args: [
-      'build', 
-      '-t', 'gcr.io/$PROJECT_ID/blabout-backend:$COMMIT_SHA',
-      '-f', 'Dockerfile',
-      '.'
-    ]
-    dir: 'backend'
+  # Step 1: Build the Rust binary
+  - name: 'rust:1.77'
+    entrypoint: bash
+    args:
+      - -lc
+      - |
+        set -euxo pipefail
+        export PATH="$PATH:/usr/local/cargo/bin"
+        if [ -f "$HOME/.cargo/env" ]; then source "$HOME/.cargo/env"; fi
+        cd backend
+        cargo --version
+        rustc --version
+        cargo build --release --locked
+        mkdir -p bin
+        cp target/release/server bin/server
+        echo 'web: ./bin/server' > Procfile
 
-  # Push the image to Container Registry
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/blabout-backend:$COMMIT_SHA']
-
-  # Deploy to Cloud Run
+  # Step 2: Deploy to Cloud Run using buildpacks (Paketo binary + Procfile)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
-    args: [
-      'run', 'deploy', 'blabout-backend',
-      '--image', 'gcr.io/$PROJECT_ID/blabout-backend:$COMMIT_SHA',
-      '--region', 'us-central1',
-      '--platform', 'managed',
-      '--allow-unauthenticated',
-      '--port', '3001',
-      '--set-env-vars', 'RUST_LOG=info,PORT=3001',
-      '--memory', '1Gi',
-      '--cpu', '1',
-      '--max-instances', '10',
-      '--timeout', '300'
-    ]
+    args:
+      - run
+      - deploy
+      - blabout-backend
+      - --source
+      - ./backend
+      - --buildpack
+      - gcr.io/paketo-buildpacks/binary
+      - --buildpack
+      - gcr.io/paketo-buildpacks/procfile
+      - --region
+      - us-central1
+      - --platform
+      - managed
+      - --allow-unauthenticated
+      - --port
+      - '3001'
+      - --set-env-vars
+      - RUST_LOG=info,PORT=3001,GOOGLE_CLOUD_PROJECT_ID=$PROJECT_ID
+      - --memory
+      - 1Gi
+      - --cpu
+      - '1'
+      - --max-instances
+      - '10'
+      - --timeout
+      - '300'
 
-# Store images in Container Registry
-images:
-  - 'gcr.io/$PROJECT_ID/blabout-backend:$COMMIT_SHA'
-
-# Build options
 options:
   machineType: 'E2_HIGHCPU_8'
   substitutionOption: 'ALLOW_LOOSE'

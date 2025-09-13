@@ -1,4 +1,17 @@
 steps:
+  # Install frontend dependencies
+  - name: 'node:20'
+    entrypoint: 'npm'
+    args: ['install']
+    dir: 'frontend'
+
+  # Build the React application
+  - name: 'node:20'
+    entrypoint: 'npm'
+    args: ['run', 'build']
+    dir: 'frontend'
+
+  # Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args: [
@@ -8,8 +21,8 @@ steps:
       '--platform', 'managed',
       '--allow-unauthenticated',
       '--port', '8080',
-      '--set-env-vars', 'REACT_APP_GOOGLE_CLIENT_ID=${_REACT_APP_GOOGLE_CLIENT_ID}',
-      '--set-build-env-vars', 'GOOGLE_NODE_RUN_SCRIPTS=build'
+      '--set-secrets', 'GOOGLE_CLIENT_ID=projects/$PROJECT_ID/secrets/GOOGLE_CLIENT_ID:latest',
+      '--set-secrets', 'API_BASE_URL=projects/$PROJECT_ID/secrets/API_BASE_URL:latest'
     ]
 
 options:
