@@ -442,7 +442,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/ws", get(websocket_handler))
         .route("/auth/paseto/login", post(paseto_login))
         .route("/auth/google/verify", get(google_verify))
-        .layer(CorsLayer::permissive())
+        .layer(
+            CorsLayer::very_permissive()
+                .allow_origin("https://blabout.com".parse().unwrap())
+        )
         .with_state(app_state);
 
     let port = std::env::var("PORT")
