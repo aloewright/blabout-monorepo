@@ -420,10 +420,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize application state
     // Load PASETO keys from env (base64url, no padding) – store via Secret Manager
     let pk_b64 = std::env::var("PASETO_V4_PUBLIC_KEY_B64").unwrap_or_default();
-    let sk_b64_opt = std::env::var("PASETO_V4_SECRET_KEY_B64").ok();
-    let paseto_keys = auth_paseto::PasetoKeys::from_base64(&pk_b64, sk_b64_opt.as_deref())
+    let sk_b64 = std::env::var("PASETO_V4_SECRET_KEY_B64")
+        .map_err(|_| "PASETO_V4_SECRET_KEY_B64 required for issuing tokens")?;
+    let paseto_keys = auth_paseto::PasetoKeys::from_base64(&pk_b64, Some(&sk_b64))
         .map_err(|e| format!("PASETO key load error: {}", e))?;
-
     let app_state = AppState {
         db_pool,
         ai_service,
