@@ -116,7 +116,7 @@ impl User {
         let row = conn.query_one(
             "INSERT INTO users (email, name, kinde_id) VALUES ($1, $2, $3) 
              RETURNING id, email, name, kinde_id as auth_provider_id, created_at",
-            &[&email, &name, &kinde_id],
+            &[&email, &name, &auth_provider_id],
         ).await?;
         
         Ok(User::from_row(row))

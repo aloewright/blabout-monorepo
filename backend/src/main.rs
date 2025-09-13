@@ -202,19 +202,6 @@ async fn google_verify(headers: HeaderMap) -> Result<Json<ApiResponse<GoogleUser
         message: "Google token verified".to_string(),
     }))
 }
-    let auth_url = format!(
-        "{}/oauth2/auth?client_id={}&redirect_uri={}&response_type=code&scope=openid profile email",
-        state.kinde_config.domain,
-        state.kinde_config.client_id,
-        state.kinde_config.redirect_uri
-    );
-    
-    Json(ApiResponse {
-        success: true,
-        data: Some(auth_url),
-        message: "Kinde login URL generated".to_string(),
-    })
-}
 
 async fn kinde_callback(
     State(_state): State<AppState>,

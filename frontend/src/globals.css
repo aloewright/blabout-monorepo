@@ -1,0 +1,11 @@
+:root {
+  --bg: #c3c3c3;
+  --card: #f1f2f5;
+  --btn: #dddedf;
+  --text: #101827;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}

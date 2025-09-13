@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import axios from 'axios';
 import { RootState } from '../store/store';
 import { setUser, clearUser } from '../store/authSlice';
+import GlassButton from './GlassButton';
 
 const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '28692687396-7uta6kmtcacg7eq5g4cjmuia592ibfb1.apps.googleusercontent.com';
 const isValidClientId = GOOGLE_CLIENT_ID && !GOOGLE_CLIENT_ID.includes('abc123');
@@ -70,10 +71,8 @@ const GoogleAuth: React.FC<GoogleAuthProps> = ({ onSuccess, onError }) => {
     return (
       <div className="flex items-center space-x-4">
         <img src={user.picture} alt={user.name} className="w-8 h-8 rounded-full" />
-        <span className="text-sm font-medium text-gray-300">{user.name}</span>
-        <button onClick={handleLogout} className="px-3 py-1 text-sm bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors">
-          Logout
-        </button>
+        <span className="text-sm font-medium text-typography">{user.name}</span>
+        <GlassButton onClick={handleLogout}>Logout</GlassButton>
       </div>
     );
   }
@@ -88,15 +87,17 @@ const GoogleAuth: React.FC<GoogleAuthProps> = ({ onSuccess, onError }) => {
   }
 
   return (
-    <motion.button
-      onClick={() => login()}
+    <motion.div
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
-      className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg font-semibold text-gray-100 bg-white/5 border border-white/10 hover:bg-white/10 transition-colors duration-300"
     >
-      <GoogleIcon />
-      Sign in with Google
-    </motion.button>
+      <GlassButton onClick={() => login()}>
+        <div className="flex items-center justify-center gap-3">
+          <GoogleIcon />
+          Sign in with Google
+        </div>
+      </GlassButton>
+    </motion.div>
   );
 };
 
