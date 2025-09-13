@@ -31,6 +31,12 @@ fn pae(pieces: &[&[u8]]) -> Vec<u8> {
     out
 }
 
+use chrono::{DateTime, Duration, Utc};
+use ed25519_dalek::{Signature, SigningKey, VerifyingKey, Signer, Verifier};
+use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
+use base64::Engine;
+
 fn b64url_nopad(data: &[u8]) -> String {
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(data)
 }
