@@ -28,7 +28,7 @@ gcloud run services describe $SERVICE_NAME --region=$REGION --format='value(stat
 echo ""
 echo "🔧 To set environment variables for production:"
 echo "gcloud run services update $SERVICE_NAME --region=$REGION \\"
-echo "  --set-env-vars REACT_APP_KINDE_REDIRECT_URI=https://blabout.com/auth/callback,\\"
+echo "  --set-env-vars REACT_APP_KINDE_REDIRECT_URI=https://blabout.com,\\"
 echo "  REACT_APP_KINDE_POST_LOGOUT_REDIRECT_URL=https://blabout.com,\\"
 echo "  REACT_APP_KINDE_POST_LOGIN_REDIRECT_URL=https://blabout.com,\\"
 echo "  REACT_APP_API_BASE_URL=https://api.blabout.com"

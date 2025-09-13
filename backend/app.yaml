@@ -11,10 +11,10 @@ env_variables:
   RUST_LOG: info
   PORT: 8080
   DATABASE_URL: postgresql://postgres:password@localhost/blabout
-  KINDE_DOMAIN: https://aftuh.kinde.com
+  KINDE_DOMAIN: https://blabout.kinde.com
   KINDE_CLIENT_ID: 86cc8835a73840638345742c900e3265
   KINDE_CLIENT_SECRET: not_applicable_for_public_client
-  KINDE_REDIRECT_URI: https://blabout.com/auth/callback
+  KINDE_REDIRECT_URI: https://blabout.com
   OPENROUTER_API_KEY: your_openrouter_api_key
   GOOGLE_CLOUD_PROJECT_ID: your_gcp_project_id
 
