@@ -59,6 +59,7 @@ const GoogleAuth: React.FC<GoogleAuthProps> = ({ onSuccess, onError }) => {
   const login = useGoogleLogin({
     onSuccess: handleLoginSuccess,
     onError: handleLoginError,
+    ux_mode: 'popup',
   });
 
   const handleLogout = () => {
